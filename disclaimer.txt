@@ -1,0 +1,117 @@
+AVERTISSEMENT ET DÉCHARGE DE RESPONSABILITÉ
+=============================================
+FFTESC — Free FTESC Tool v1.01
+Dernière mise à jour : Mai 2026
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. NATURE DU LOGICIEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FFTESC Tool est un logiciel libre fourni "TEL QUEL" (AS IS), sans
+aucune garantie, expresse ou implicite, y compris mais sans s'y
+limiter, les garanties de qualité marchande, d'adéquation à un
+usage particulier ou de non-violation de droits de propriété.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. RISQUES MATÉRIELS ET PHYSIQUES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+L'utilisation de ce logiciel implique la configuration et le
+contrôle de contrôleurs électroniques de vitesse (ESC) alimentant
+des moteurs électriques de forte puissance (BLDC). Une mauvaise
+configuration peut entraîner :
+
+  ▪ Destruction du contrôleur ESC (surchauffe, court-circuit,
+    surtension, surintensité)
+  ▪ Destruction du moteur (surcharge thermique, survitesse,
+    démagnétisation des aimants)
+  ▪ Destruction de la batterie (décharge profonde, surcharge,
+    emballement thermique, incendie)
+  ▪ Endommagement du véhicule ou de l'équipement motorisé
+  ▪ Blessures corporelles graves (brûlures, coupures, chocs,
+    incendie, explosion)
+  ▪ Dommages matériels collatéraux
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. RESPONSABILITÉ DE L'UTILISATEUR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+L'utilisateur reconnaît et accepte que :
+
+  a) Il est seul responsable de la vérification de chaque
+     paramètre avant application au contrôleur.
+  b) Il doit comprendre les limites physiques de son matériel
+     (courant max, tension max, température max, KV moteur,
+     capacité batterie, etc.).
+  c) Il doit tester progressivement toute nouvelle configuration,
+     d'abord à vide (sans charge), puis sous charge légère,
+     avant utilisation normale.
+  d) Il doit disposer d'un moyen de coupure d'urgence (E-Stop)
+     fonctionnel et accessible en permanence.
+  e) Il ne doit jamais modifier les paramètres de sécurité
+     (limites de courant, température, tension) au-delà des
+     spécifications du fabricant.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. DÉCHARGE DE RESPONSABILITÉ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+En aucun cas les auteurs, contributeurs, mainteneurs ou
+distributeurs de FFTESC Tool ne pourront être tenus responsables
+de :
+
+  ▪ Tout dommage matériel direct ou indirect résultant de
+    l'utilisation de ce logiciel
+  ▪ Toute blessure corporelle ou décès résultant de l'utilisation
+    de ce logiciel
+  ▪ Toute perte de données, de temps ou de revenus
+  ▪ Tout dommage consécutif, accidentel ou spécial
+
+L'utilisation de FFTESC Tool est entièrement aux risques et
+périls de l'utilisateur.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. MODE DE RÉCUPÉRATION (RÉANIMATION)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Le logiciel inclut un module de récupération permettant de
+réanimer un contrôleur "brické" via UART ou ST-Link. Cette
+opération :
+
+  ▪ Est fournie à titre indicatif et sans garantie de succès
+  ▪ Peut annuler la garantie du fabricant
+  ▪ Peut endommager définitivement le microcontrôleur si mal
+    exécutée (mauvais câblage, firmware incompatible, etc.)
+  ▪ Nécessite des compétences techniques en électronique et
+    programmation de microcontrôleurs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. UTILISATION DU SIMULATEUR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Le simulateur intégré ne remplace pas les tests sur matériel
+réel. Les données simulées sont approximatives et ne reflètent
+pas nécessairement le comportement réel du contrôleur.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. ACCEPTATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+En utilisant FFTESC Tool, vous acceptez intégralement les termes
+de cette décharge de responsabilité. Si vous n'acceptez pas ces
+conditions, n'utilisez pas ce logiciel.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. CONTACT ET COMMUNAUTÉ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pour toute question ou signalement de bug, veuillez contacter
+la communauté FFTESC ou consulter le référentiel officiel.
+
+Ce document ne remplace pas les manuels techniques des fabricants
+de matériel. Consultez toujours la documentation officielle de
+votre ESC, moteur et batterie avant toute configuration.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+© 2026 FFTESC Project — Logiciel libre, aucune garantie.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

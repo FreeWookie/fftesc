@@ -1,0 +1,12 @@
+[workspace]
+restore_data_on_startup = True
+save_data_on_exit = True
+save_history = True
+save_non_project_files = False
+project_type = 'empty-project-type'
+recent_files = ['ftesc_tool.py', 'ftesc/__init__.py', 'config.json', 'ftesc/simulator.py', 'ftesc/data.py', 'ftesc/transport.py', 'gui/logo.py', 'gui/app.py', 'gui/tooltip.py', 'gui/panels/config_panel.py']
+
+[main]
+version = 0.2.0
+recent_files = []
+

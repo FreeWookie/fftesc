@@ -1,0 +1,39 @@
+# Environnement virtuel
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Fichiers temporaires
+*.log
+.DS_Store
+
+# PyInstaller build artifacts
+build/
+dist/
+logo_cache/
+
+# Cache utilisateur
+~/.fftesc/
+
+# Configuration utilisateur (contient des paramètres personnels)
+config.json
+
+# Fichiers de logs ou de sortie
+*.out
+
+# Environnements virtuels supplémentaires
+.venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,build
+.hypothesis/
+.pytest_cache/

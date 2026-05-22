@@ -1,0 +1,87 @@
+DEV PISTES — FFTESC v1.01
+===========================
+
+1. Editeur graphique courbes throttle/brake
+-------------------------------------------
+Fichiers : gui/panels/config_panel.py, nouveau widget
+Remplace les champs CSV "Throttle Curve (6 vals)" et "Brake Curve (6 vals)"
+par un widget matplotlib interactif. L'utilisateur clique/glisse 6 points
+de controle sur un graphique pour ajuster la courbe d'acceleration/freinage.
+Complexite : Elevee
+
+2. Bouton Read All / Write All (toutes sections, tous controleurs)
+-------------------------------------------------------------------
+Fichiers : gui/panels/config_panel.py
+Actuellement "Lire tout l'onglet" ne lit que les sections de l'onglet
+courant. Un bouton "Lire tout" global lirait les 12 sections des deux
+controleurs (A et B) et les sections globales (~26 trames avec delais).
+Complexite : Moyenne
+
+3. Barre de progression pour les operations bulk
+-------------------------------------------------
+Fichiers : gui/panels/config_panel.py
+Afficher une CTkProgressBar dans le footer du ConfigPanel pour visualiser
+l'avancement (ex: 3/12 sections lues) lors des lectures/ecritures multi-sections.
+Complexite : Faible
+
+4. Persistance de la config dans l'EEPROM du controleur
+--------------------------------------------------------
+Fichiers : ftesc/config_protocol.py, gui/panels/config_panel.py
+Bouton "Sauvegarder dans l'EEPROM" qui envoie la commande de sauvegarde
+permanente au controleur. Complement du "Read All" qui recharge depuis
+l'EEPROM. Depend du support firmware.
+Complexite : Moyenne
+
+5. Tests d'integration simulateur + boucle temps reel
+------------------------------------------------------
+Fichiers : tests/test_integration.py
+Tester la boucle complete : simulateur -> transport -> parse -> affichage UI.
+Verifier que les donnees simulees transitent correctement jusqu'aux
+ValueCards/ChartCards. Besoin d'un mock Tkinter.
+Complexite : Moyenne
+
+6. Export/import profils par fichier externe
+---------------------------------------------
+Fichiers : ftesc/profiles.py, gui/panels/config_panel.py
+Actuellement les profils sont dans ~/.fftesc_profiles/. Ajouter "Exporter..."
+(choisir un chemin .json) et "Importer..." (selectionner un fichier).
+Complexite : Faible
+
+7. Mode veille auto et reconnexion
+-----------------------------------
+Fichiers : ftesc/transport.py
+Si le port serie se deconnecte, tenter une reconnexion automatique toutes
+les 2 secondes. Envoyer KEEP_LIVE periodiquement pour detecter la perte
+de connexion plus rapidement.
+Complexite : Faible
+
+8. Gestion multi-controleurs (CAN)
+-----------------------------------
+Fichiers : gui/app.py, gui/panels/connection.py
+Interface pour detecter et selectionner plusieurs controleurs sur le bus
+CAN. Afficher la liste des IDs, permettre de les nommer, et basculer la
+configuration/telemetrie entre eux.
+Complexite : Elevee (necessite hardware CAN)
+
+9. Logging temps reel avec rejeu
+---------------------------------
+Fichiers : ftesc/logger.py, gui/panels/realtime.py
+Bouton "Enregistrer" dans le panneau telemetrie qui demarre l'enregistrement
+CSV. Mode "Rejeu" qui lit un fichier CSV et le repasse dans l'UI au meme
+rytme (debug sans hardware).
+Complexite : Moyenne
+
+10. Documentation du protocole
+-------------------------------
+Fichiers : docs/PROTOCOL_SPEC.md (vide actuellement)
+Rediger la specification complete du protocole UART : trames, CRC16,
+types de donnees, commandes, sections de configuration.
+Complexite : Faible (redactionnel)
+
+11. Indicateur de progression par section (spinner)
+-----------------------------------------------------
+Fichiers : gui/panels/config_panel.py
+Quand on clique "Appliquer" ou "Lire" sur une section, remplacer
+temporairement l'icone du bouton par un spinner (ou desactiver le bouton)
+jusqu'a reception de la réponse. Feedback visuel immediat.
+Complexite : Faible

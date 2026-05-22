@@ -1,0 +1,226 @@
+FFTESC — Architecture du projet (v1.01)
+==========================================
+
+┌─────────────────────────────────────────────────────────────┐
+│                    PRESENTATION (gui/)                       │
+│  CustomTkinter + matplotlib + tooltips + i18n + wizard      │
+│                                                              │
+│  gui/app.py            Fenêtre principale (1200×750)         │
+│  gui/logo.py           Gestion SVG → PNG → CTkImage        │
+│  gui/tooltip.py        TooltipManager singleton (500ms)     │
+│  gui/descriptions.py   Chargeur param_descriptions.json     │
+│  gui/styles/colors.py  Palette couleurs nommées             │
+│  gui/i18n/             Internationalisation (6 langues)      │
+│                                                              │
+│  Panneaux (sidebar) :                                        │
+│    connection.py    Port série, connexion, simulateur        │
+│    control.py       Duty, courant, freinage, estop, reboot   │
+│    profile.py       Save/Load/Delete profils                │
+│    recovery.py      🆘 Zone de récupération (bootloader)    │
+│                                                              │
+│  Panneaux (main area) :                                      │
+│    realtime.py      6 ChartCards × 2 moteurs + ID/FW header │
+│    config_panel.py  Éditeur config 7 sous-tabs (lazy load)  │
+│    wizard_panel.py  Assistant configuration 4 étapes        │
+│    status.py        Barre d'état TX/RX/CRC + dons           │
+│                                                              │
+│  Config tabs (chargés dynamiquement) :                       │
+│    config_tabs/motors.py    Moteur, Hall, FOC              │
+│    config_tabs/limits.py    Limites, Rampes, Freinage       │
+│    config_tabs/dual.py      Dual Motor                      │
+│    config_tabs/inputs.py    Entrées, PID Vitesse            │
+│    config_tabs/battery.py   Batterie                        │
+│    config_tabs/comms.py     CAN Bus                         │
+│    config_tabs/advanced.py  IMU                             │
+│                                                              │
+│  Widgets réutilisables :                                     │
+│    value_card.py    Carte valeur + unité                     │
+│    chart_card.py    Sparkline matplotlib 100 pts             │
+│    fault_indicator.py   Point vert/rouge                    │
+│    motor_selector.py    A/B/Les deux (segmented button)     │
+│    helpers.py       enhance_scroll() molette slider         │
+├─────────────────────────────────────────────────────────────┤
+│                    COUCHE MÉTIER (ftesc/)                     │
+│                                                              │
+│  ftesc/data.py           Dataclasses config (12 sections)    │
+│                          + enums + temps réel + firmware     │
+│  ftesc/protocol.py       Protocole UART : CRC16, framing,    │
+│                          compose/décompose (u8..af32)        │
+│                          + ENTER_BOOTLOADER(60)              │
+│                          + CHECK_MCU_HEALTH(61)              │
+│  ftesc/transport.py      Couche série asynchrone (thread)    │
+│                          buffer, callbacks, stats            │
+│                          + enter_bootloader()                │
+│                          + check_mcu_health()                │
+│  ftesc/config_protocol.py Encodage/décodage 12 sections      │
+│                          config ↔ bytes UART (Field class)   │
+│  ftesc/profiles.py       Persistance JSON profils            │
+│  ftesc/logger.py         Log CSV temps réel                  │
+│  ftesc/simulator.py      Simulateur dual moteur réaliste     │
+│  ftesc/wizard_engine.py  Moteur de calcul wizard (D30)       │
+│                          + ratio auto pignon/poulie          │
+│                          + conversion unités (mm/in, km/mph) │
+│                          + efficacité transmission           │
+│  ftesc/wizard_data.py    Base de données moteurs/batteries   │
+├─────────────────────────────────────────────────────────────┤
+│                    COUCHE PHYSIQUE                            │
+│                                                              │
+│  UART série (pyserial) ←→ µC FTESC                          │
+│  Header 0xAA/0xBB, Footer 0xDD, CRC16 MODBUS               │
+│  22 commandes (SET_DUTY, READ_CONFIG, etc.)                  │
+│  Types : u8..u32, i16..i32, f16 (×100), f32 (×1e6), af32   │
+│                                                              │
+│  Référence firmware C : fftesc_uart_FR.c (378 lignes)       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STRUCTURE DES FICHIERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FFTESC-TOOL/
+├── ftesc_tool.py          Entry point (10 lignes)
+├── config.json            Config utilisateur
+├── architecture.txt       Ce fichier
+├── requirements.txt       Dépendances Python
+├── README.txt             Documentation
+├── disclaimer.txt         Décharge de responsabilité
+│
+├── ftesc/                 Couche métier (~3 200 lignes)
+│   ├── __init__.py        Réexporte toute l'API publique
+│   ├── data.py            Dataclasses : 12 configs + runtime
+│   ├── protocol.py        CRC16, framing, compose/décompose
+│   ├── transport.py       Série asynchrone (thread, buffer)
+│   ├── config_protocol.py Sérialisation config ↔ UART
+│   ├── profiles.py        Gestion profils JSON
+│   ├── logger.py          Log CSV temps réel
+│   ├── simulator.py       Simulateur dual moteur
+│   ├── wizard_engine.py   Moteur de calcul wizard
+│   ├── wizard_data.py     DB moteurs/batteries/transmissions
+│   ├── ffteSc_logo.svg    Logo offline
+│   ├── ffteSc_logo_on.svg Logo online
+│   ├── ffteSc_title.svg   Titre offline
+│   └── ffteSc_title_on.svg Titre online
+│
+├── gui/                   Interface graphique (~2 500 lignes)
+│   ├── __init__.py
+│   ├── app.py             Fenêtre principale, callbacks
+│   ├── logo.py            SVG → PNG → CTkImage
+│   ├── tooltip.py         TooltipManager singleton
+│   ├── descriptions.py    Chargeur JSON descriptions
+│   ├── wizard_data.py     DB UI (moteurs, batteries, profils)
+│   ├── styles/
+│   │   └── colors.py      Palette couleurs
+│   ├── i18n/              Traductions (6 langues)
+│   │   ├── __init__.py    Chargeur i18n
+│   │   ├── fr.json        Français
+│   │   ├── en.json        English
+│   │   ├── de.json        Deutsch
+│   │   ├── es.json        Español
+│   │   ├── pl.json        Polski
+│   │   └── it.json        Italiano
+│   ├── widgets/
+│   │   ├── chart_card.py   Sparkline matplotlib
+│   │   ├── value_card.py   Valeur + unité
+│   │   ├── fault_indicator.py Point état
+│   │   ├── motor_selector.py A/B/Les deux
+│   │   └── helpers.py      Molette slider
+│   └── panels/
+│       ├── connection.py   Connexion série & simulateur
+│       ├── control.py      Contrôle moteur
+│       ├── realtime.py     Télémétrie temps réel
+│       ├── config_panel.py Éditeur config 7 sous-tabs
+│       ├── profile.py      Gestion profils
+│       ├── status.py       Barre d'état
+│       ├── wizard_panel.py Assistant configuration 4 étapes
+│       ├── recovery.py     🆿 Zone de récupération
+│       └── config_tabs/    Modules chargés dynamiquement
+│           ├── motors.py   Moteur, Hall, FOC
+│           ├── limits.py   Limites, Rampes, Freinage
+│           ├── dual.py     Dual Motor
+│           ├── inputs.py   Entrées, PID
+│           ├── battery.py  Batterie
+│           ├── comms.py    CAN
+│           └── advanced.py IMU
+│
+├── tests/                 Tests unitaires pytest (~850 lignes)
+│   ├── test_validators.py  Validation + round-trip
+│   ├── test_wizard.py      Tests wizard (D26-D30)
+│   └── test_transport_recovery.py Tests récupération
+│
+├── docs/
+│   ├── param_descriptions.json  118 descriptions tooltips
+│   ├── pistes_restantes.md      Features futures
+│   ├── PROTOCOL_SPEC.md         Spécification protocole UART
+│   └── RECOVERY_GUIDE.md        Guide de récupération
+│
+├── logo_cache/            Cache PNG (SVG → PNG)
+├── fftesc_uart_FR.c       Firmware C de référence
+│
+└── widgets/               CustomTkinter embarqué (~8 000 lignes)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DÉPENDANCES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+customtkinter >= 5.2.0    UI
+pyserial    >= 3.5        Communication série
+matplotlib  >= 3.7.0      Graphiques temps réel
+numpy       >= 1.24.0     Calculs (via matplotlib)
+Pillow      >= 10.0.0     Manipulation images (logo)
+cairosvg    >= 2.7.0      Conversion SVG → PNG
+pytest      >= 7.0.0      Tests unitaires
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TESTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+163+ tests pytest :
+  - Validation plages de chaque dataclass
+  - Round-trip encode/decode 12 sections
+  - Construction/trames config
+  - Wizard engine (calculs, validations, i18n)
+  - Transport recovery (bootloader, health check)
+
+Lancement : python3 -m pytest tests/ -v
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROTOCOLE UART (résumé)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Trame : [0xAA|0xBB] [length] [command] [payload...] [CRC16] [0xDD]
+CRC16 : MODBUS big-endian (2 tables 256 octets)
+
+Commandes : OBTAIN_DATA_ONCE(0), SET_DUTY(3), SET_CURRENT(4),
+             SET_BRAKE_CURRENT(6), OBTAIN_FIRMWARE_VERSION(17),
+             READ_CONFIG(40), WRITE_CONFIG(41),
+             READ_ALL_CONFIG(42), WRITE_ALL_CONFIG(43),
+             ENTER_BOOTLOADER(60), CHECK_MCU_HEALTH(61)
+
+Types : u8, u16, u24, u32, i16, i24, i32,
+        f16 (valeur × 100 en i16),
+        f32 (valeur × 1e6 en i32),
+        af32 (frexp sur u32)
+
+Sections config : Motor(0), Hall(1), FOC(2), Limits(3),
+                  Ramp(4), Brake(5), InputCtrl(6), SpeedPID(7),
+                  Battery(8), Dual(9), IMU(10), CAN(11)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOUVEAUTÉS v1.01
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▪ Assistant de configuration (Wizard) 4 étapes :
+   - Sélection profil (Débutant/Avancé/Expert)
+   - Moteur, batterie, transmission (pignon/poulie auto)
+   - Calcul automatique courant, vitesse, ERPM, PID
+   - Résumé avec avertissements de cohérence
+▪ Internationalisation : 6 langues (FR, EN, DE, ES, PL, IT)
+▪ Module de récupération (🆿 Réanimation) :
+   - Diagnostic MCU (sain/corrompu/inconnu)
+   - Forçage mode bootloader UART
+   - Guide câblage ST-Link + lien STM32CubeProgrammer
+▪ Conversion unités : diamètre roue (mm/pouces), vitesse (km/h/mph)
+▪ Efficacité transmission configurable (70%-95%)
+▪ Avertissements de cohérence : KV élevé, pignon petit, ratio extrême
+▪ Décharge de responsabilité (disclaimer.txt)
