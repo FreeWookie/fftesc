@@ -544,9 +544,13 @@ class ConfigPanel(ctk.CTkFrame):
         if tab_frame is None:
             return
 
+        # Wrapper scrollable pour tous les onglets
+        scroll = ctk.CTkScrollableFrame(tab_frame, fg_color='transparent')
+        scroll.pack(fill='both', expand=True)
+
         meta = {"motor_specific": getattr(mod, "MOTOR_SPECIFIC", False)}
         if meta["motor_specific"]:
-            sel_frame = ctk.CTkFrame(tab_frame, fg_color='transparent')
+            sel_frame = ctk.CTkFrame(scroll, fg_color='transparent')
             sel_frame.pack(fill='x', padx=10, pady=(8, 4))
             self._selector = MotorSelector(sel_frame)
             self._selector.pack()
@@ -560,7 +564,7 @@ class ConfigPanel(ctk.CTkFrame):
             if obj is None:
                 continue
             frame, sec_entries, sec_widgets = _build_section_grid(
-                tab_frame, obj, sec_key, title, "", color, fields, bcolor,
+                scroll, obj, sec_key, title, "", color, fields, bcolor,
                 visible=True,
                 on_apply=lambda sk, co, tn=tab_name: self._on_section_apply(sk, co, tn),
                 on_read=lambda sk, co, tn=tab_name: self._on_section_read(sk, co, tn),
@@ -574,7 +578,7 @@ class ConfigPanel(ctk.CTkFrame):
         self._tab_meta[tab_name] = meta
         self._contents[tab_name] = True
         if hasattr(mod, 'build_ui'):
-            mod.build_ui(tab_frame, self)
+            mod.build_ui(scroll, self)
 
     def _resolve_config_obj(self, sec_key: str, motor_specific: bool):
         if motor_specific:

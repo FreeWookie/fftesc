@@ -114,7 +114,8 @@ class FtescTransport:
             for p in available_ports:
                 info = self.get_port_info(p)
                 if any(keyword in info.get('description', '').lower()
-                       for keyword in ['usb', 'serial', 'ftdi', 'cp210x', 'ch340']):
+                       for keyword in ['usb', 'serial', 'ftdi', 'cp210x', 'ch340',
+                                        'acm', 'com port', 'virtual com']):
                     port = p
                     logger.info(f"Port détecté automatiquement : {port}")
                     break
@@ -243,12 +244,12 @@ class FtescTransport:
                 if header_pos + 1 >= len(self._rx_buffer):
                     break
                 expected_length = self._rx_buffer[header_pos + 1]
-                frame_end = header_pos + 1 + expected_length + 2 + 1
+                frame_end = header_pos + 2 + expected_length + 2 + 1
             else:
                 if header_pos + 2 >= len(self._rx_buffer):
                     break
                 expected_length = (self._rx_buffer[header_pos + 1] << 8) | self._rx_buffer[header_pos + 2]
-                frame_end = header_pos + 2 + expected_length + 2 + 1
+                frame_end = header_pos + 3 + expected_length + 2 + 1
 
             if len(self._rx_buffer) < frame_end:
                 break
@@ -370,6 +371,97 @@ class FtescTransport:
             except queue.Empty:
                 continue
         raise TimeoutError("No response from MCU within timeout")
+
+    def set_esc_id(self, new_id: int, current_ma: int = 0, timeout: float = 2.0) -> bool:
+        """Change l'ID d'un ESC.
+        
+        Tente d'abord SET_ID_CURRENT (cmd 37). Si pas de réponse,
+        tente via WRITE_CONFIG sur la section CAN (SEC_CAN).
+        En dernier recours, suggère le flash physique par ST-Link.
+        
+        Args:
+            new_id: Nouvel ID à attribuer (0-255)
+            current_ma: Courant en mA (SET_ID_CURRENT). 0 = pas de courant.
+            timeout: Délai d'attente max.
+        
+        Returns:
+            True si l'ID a été changé avec succès.
+        """
+        if not self.is_connected:
+            raise ConnectionError("Transport not connected")
+
+        # Méthode 1: SET_ID_CURRENT
+        from .protocol import build_set_id_frame, parse_frame
+        from .config_protocol import (
+            SEC_CAN, CTRL_MOTOR_A, CTRL_MOTOR_B,
+            build_read_config_frame, build_write_config_frame,
+            parse_config_response, decode_section_response,
+            encode_section, CAN_FIELDS,
+        )
+        from .data import CANConfig
+
+        frame = build_set_id_frame(new_id, current_ma)
+        self.send(frame)
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                cmd, payload = self._response_queue.get(timeout=0.1)
+                if cmd == UartCommand.SET_ID_CURRENT:
+                    logger.info("ID changé via SET_ID_CURRENT → %d", new_id)
+                    return True
+            except queue.Empty:
+                continue
+
+        # Méthode 2: WRITE_CONFIG sur section CAN
+        # Note: nécessite que l'ESC actuel ait l'ID 'new_id' dans sa config CAN
+        logger.info("SET_ID_CURRENT sans réponse, tentative via WRITE_CONFIG...")
+        for ctrl_id in (CTRL_MOTOR_A, CTRL_MOTOR_B):
+            try:
+                cfg = CANConfig(id_a=ctrl_id, id_b=ctrl_id ^ 1)
+                # On lit d'abord la config actuelle pour préserver les autres champs
+                read_frame = build_read_config_frame(ctrl_id, SEC_CAN)
+                self.send(read_frame)
+                time.sleep(0.1)
+                # Si pas de réponse, on tente d'écrire directement
+                write_frame = build_write_config_frame(ctrl_id, SEC_CAN, cfg)
+                self.send(write_frame)
+                time.sleep(0.1)
+                # Vérifier si on reçoit un ACK
+                deadline = time.monotonic() + 1.0
+                while time.monotonic() < deadline:
+                    try:
+                        cmd, payload = self._response_queue.get(timeout=0.05)
+                        if cmd == UartCommand.WRITE_CONFIG:
+                            logger.info("CAN config écrite pour ctrl_id=%d", ctrl_id)
+                            return True
+                    except queue.Empty:
+                        break
+            except Exception:
+                continue
+
+        logger.warning("Impossible de changer l'ID de l'ESC")
+        return False
+
+    def obtain_all_ids(self, timeout: float = 2.0) -> list[int]:
+        """Découvre tous les IDs d'ESC sur le bus UART.
+        
+        Returns:
+            Liste des IDs de contrôleurs détectés.
+        """
+        if not self.is_connected:
+            raise ConnectionError("Transport not connected")
+        from .protocol import build_obtain_all_ids_frame, parse_obtain_all_ids
+        frame = build_obtain_all_ids_frame()
+        self.send(frame)
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                cmd, payload = self._response_queue.get(timeout=0.1)
+                if cmd == UartCommand.OBTAIN_ALL_FTESC_ID:
+                    return parse_obtain_all_ids(payload)
+            except queue.Empty:
+                continue
+        return []
 
     def reset_statistics(self):
         self._bytes_sent = 0

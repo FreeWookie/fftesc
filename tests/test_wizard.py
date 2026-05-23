@@ -62,7 +62,7 @@ class TestWizardDataMotors:
 
 class TestWizardDataBatteries:
     def test_required_batteries_present(self):
-        for batt in ("6S LiPo", "8S LiPo", "10S LiPo", "12S LiPo"):
+        for batt in ("4S LiPo", "6S LiPo", "8S LiPo", "10S LiPo", "12S LiPo", "14S LiPo"):
             assert batt in BATTERIES_DB, f"Batterie '{batt}' manquante"
 
     def test_battery_keys_complete(self):
@@ -401,8 +401,8 @@ class TestWizardWarnings:
         self.engine = WizardEngine()
 
     def test_high_voltage_triggers_warning(self):
-        """16S LiPo dépasse 58 V → avertissement attendu."""
-        inp = _inputs(battery_name="16S LiPo", profile="Avancé")
+        """14S LiPo (58.8 V) dépasse 58 V → avertissement attendu."""
+        inp = _inputs(battery_name="14S LiPo", profile="Avancé")
         result = self.engine.calculate_config(inp)
         assert any("58" in w or "tension" in w.lower() for w in result.warnings), \
             f"Avertissement tension absent. Avertissements : {result.warnings}"
@@ -517,12 +517,12 @@ class TestCurrentClamp:
         result = self.engine.calculate_config(_inputs())
         assert isinstance(result.clamped_warnings, list)
 
-    def test_16s_triggers_clamped_warning(self):
-        """16S LiPo → tension > 58 V → doit déclencher un clamped_warning."""
-        inp = _inputs(battery_name="16S LiPo", profile="Avancé")
+    def test_14s_triggers_clamped_warning(self):
+        """14S LiPo (58.8 V) → tension > 58 V → doit déclencher un clamped_warning."""
+        inp = _inputs(battery_name="14S LiPo", profile="Avancé")
         result = self.engine.calculate_config(inp)
         assert len(result.clamped_warnings) > 0, \
-            "Attendu au moins 1 clamped_warning pour 16S LiPo"
+            "Attendu au moins 1 clamped_warning pour 14S LiPo"
         # Le message doit mentionner la tension ou la limite
         combined = " ".join(result.clamped_warnings).lower()
         assert any(kw in combined for kw in ("tension", "v", "volt")), \
@@ -609,8 +609,8 @@ class TestProfileSaving:
     def test_save_profile_with_clamped_config(self):
         """Même une config avec clamps doit être sauvegardable proprement."""
         from ftesc.profiles import save_profile, load_profile, delete_profile
-        # 16S → déclenche des clamps
-        inp = _inputs(battery_name="16S LiPo", profile="Expert",
+        # 14S → déclenche des clamps
+        inp = _inputs(battery_name="14S LiPo", profile="Expert",
                       config_name="ClampedSetup")
         result = self.engine.calculate_config(inp)
         name = "_test_d29_clamped_profile"

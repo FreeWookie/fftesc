@@ -4,7 +4,6 @@ gui/app.py — Point d'entrée de l'interface graphique FFTESC
 """
 
 import customtkinter as ctk
-import tkinter.messagebox as tkmb
 from typing import Optional
 import json
 import os
@@ -13,19 +12,18 @@ from ftesc import (
     FtescTransport, ConnectionState, FtescRealtimeData, FtescFirmwareInfo,
     FtescDualData,
     UartCommand, parse_frame, parse_realtime_data, parse_firmware_info,
-    build_frame, build_obtain_all_ids_frame,
+    build_frame, build_obtain_all_ids_frame, parse_obtain_all_ids,
 )
 from ftesc.config_protocol import parse_config_response, SECTION_NAMES
-from ftesc.profiles import save_profile, load_profile, list_profiles, delete_profile, export_profile, import_profile
-from gui.styles.colors import COLORS
 from gui.panels.connection import ConnectionPanel
 from gui.panels.control import ControlPanel
 from gui.panels.realtime import RealtimeDataPanel, MOTOR_LABEL_A, MOTOR_LABEL_B
-from gui.panels.config_panel import ConfigPanel
 from gui.panels.profile import ProfilePanel
 from gui.panels.status import StatusBar
+from gui.panels.config_panel import ConfigPanel
 from gui.panels.wizard_panel import WizardPanel
 from gui.panels.recovery import RecoveryPanel
+from gui.styles.colors import COLORS
 from gui.app_icons import (
     apply_window_icons, make_title_ctk_image, make_logo_ctk_image,
     make_connection_indicator_images, update_connection_indicator,
@@ -127,32 +125,11 @@ class FftescApp(ctk.CTk):
 
         self._main_area = ctk.CTkFrame(self, fg_color=COLORS['bg_dark'])
         self._main_area.grid(row=0, column=1, rowspan=2, sticky='nsew', padx=10, pady=10)
-        self._main_area.grid_rowconfigure(1, weight=1)
+        self._main_area.grid_rowconfigure(0, weight=1)
         self._main_area.grid_columnconfigure(0, weight=1)
 
-        self._profile_frame = ctk.CTkFrame(self._main_area, fg_color=COLORS['bg_medium'], corner_radius=8)
-        self._profile_frame.grid(row=0, column=0, sticky='ew', pady=(0, 8))
-        ctk.CTkLabel(self._profile_frame, text="\U0001f4c1 Profile:", font=ctk.CTkFont(size=12, weight='bold'), text_color=COLORS['accent_blue']).pack(side='left', padx=(12, 5))
-        self._profile_name_var = ctk.StringVar(value="")
-        self._profile_name_entry = ctk.CTkEntry(self._profile_frame, textvariable=self._profile_name_var, width=150, font=ctk.CTkFont(size=12), fg_color=COLORS['bg_dark'], border_color=COLORS['accent_blue'])
-        self._profile_name_entry.pack(side='left', padx=(0, 8))
-        self._save_profile_btn = ctk.CTkButton(self._profile_frame, text="\U0001f4be Save", command=self._on_save_profile, fg_color=COLORS['accent_green'], hover_color=COLORS['success'], font=ctk.CTkFont(size=11), width=65, height=28)
-        self._save_profile_btn.pack(side='left', padx=(0, 4))
-        self._profile_list_var = ctk.StringVar(value="\U0001f4c2 Load...")
-        self._profile_list_menu = ctk.CTkOptionMenu(self._profile_frame, variable=self._profile_list_var, values=["\U0001f4c2 Load..."], fg_color=COLORS['bg_dark'], button_color=COLORS['accent_blue'], font=ctk.CTkFont(size=11), width=120)
-        self._profile_list_menu.pack(side='left', padx=(0, 4))
-        self._load_profile_btn = ctk.CTkButton(self._profile_frame, text="Load", command=self._on_load_profile, fg_color=COLORS['accent_blue'], hover_color=COLORS['accent'], font=ctk.CTkFont(size=11), width=55, height=28)
-        self._load_profile_btn.pack(side='left', padx=(0, 4))
-        self._del_profile_btn = ctk.CTkButton(self._profile_frame, text="Del", command=self._on_delete_profile, fg_color=COLORS['danger'], hover_color='#b91c1c', font=ctk.CTkFont(size=11), width=45, height=28)
-        self._del_profile_btn.pack(side='left', padx=(0, 4))
-        self._refresh_profile_btn = ctk.CTkButton(self._profile_frame, text="\U0001f504", command=self._refresh_profile_list, fg_color=COLORS['bg_dark'], hover_color=COLORS['accent'], font=ctk.CTkFont(size=14), width=30, height=28)
-        self._refresh_profile_btn.pack(side='left', padx=(0, 4))
-        ctk.CTkButton(self._profile_frame, text="\U0001f4e4 Export", command=self._on_export_profile, fg_color=COLORS['bg_dark'], hover_color=COLORS['accent_blue'], font=ctk.CTkFont(size=10), width=55, height=28).pack(side='left', padx=(0, 4))
-        ctk.CTkButton(self._profile_frame, text="\U0001f4e5 Import", command=self._on_import_profile, fg_color=COLORS['bg_dark'], hover_color=COLORS['accent_green'], font=ctk.CTkFont(size=10), width=55, height=28).pack(side='left', padx=(0, 4))
-        self._refresh_profile_list()
-
         self._main_tabs = ctk.CTkTabview(self._main_area, fg_color=COLORS['bg_medium'], corner_radius=8)
-        self._main_tabs.grid(row=1, column=0, sticky='nsew')
+        self._main_tabs.grid(row=0, column=0, sticky='nsew')
 
         self._main_tabs.add("T\u00e9l\u00e9m\u00e9trie")
         self._main_tabs.add("Configuration")
@@ -196,8 +173,8 @@ class FftescApp(ctk.CTk):
         # Create a new top-level window
         recovery_window = ctk.CTkToplevel(self)
         recovery_window.title("🆘 Zone de Récupération")
-        recovery_window.geometry("400x500")
-        recovery_window.resizable(False, False)
+        recovery_window.geometry("440x680")
+        recovery_window.resizable(True, True)
 
         # Make it modal
         recovery_window.transient(self)
@@ -213,108 +190,6 @@ class FftescApp(ctk.CTk):
             recovery_window.destroy()
 
         recovery_window.protocol("WM_DELETE_WINDOW", on_closing)
-
-    def _refresh_profile_list(self):
-        profiles = list_profiles()
-        values = ["\U0001f4c2 Load..."] + profiles if profiles else ["\U0001f4c2 Load..."]
-        self._profile_list_menu.configure(values=values)
-        if profiles:
-            self._profile_list_var.set("\U0001f4c2 Load...")
-
-    def _on_save_profile(self):
-        name = self._profile_name_var.get().strip()
-        if not name:
-            tkmb.showwarning("Save Profile", "Please enter a profile name")
-            return
-        try:
-            config = self._config_panel.collect_config_from_ui()
-            errors = config.validate()
-            has_errors = any(errors[k] for k in errors)
-            if has_errors:
-                all_errs = []
-                for section, errs in errors.items():
-                    if errs:
-                        all_errs.append(f"  {section}: {'; '.join(errs)}")
-                msg = "Validation errors:\n" + "\n".join(all_errs)
-                if not tkmb.askyesno("Validation Warnings", msg + "\n\nSave anyway?"):
-                    return
-            config.name = name
-            save_profile(name, config)
-            self._profile_name_var.set(name)
-            self._refresh_profile_list()
-            tkmb.showinfo("Save Profile", f"Profile '{name}' saved successfully")
-        except ValueError as e:
-            tkmb.showerror("Error", f"Invalid value: {e}")
-        except Exception as e:
-            tkmb.showerror("Error", f"Failed to save: {e}")
-
-    def _on_load_profile(self):
-        name = self._profile_list_var.get()
-        if name == "\U0001f4c2 Load..." or not name:
-            tkmb.showinfo("Load Profile", "Select a profile from the dropdown first")
-            return
-        try:
-            config = load_profile(name)
-            if config is None:
-                tkmb.showerror("Error", f"Profile '{name}' not found")
-                return
-            self._config_panel.apply_config_to_ui(config)
-            self._profile_name_var.set(name)
-            tkmb.showinfo("Load Profile", f"Profile '{name}' loaded")
-        except Exception as e:
-            tkmb.showerror("Error", f"Failed to load: {e}")
-
-    def _on_delete_profile(self):
-        name = self._profile_list_var.get()
-        if name == "\U0001f4c2 Load..." or not name:
-            tkmb.showinfo("Delete Profile", "Select a profile from the dropdown first")
-            return
-        if not tkmb.askyesno("Delete Profile", f"Delete profile '{name}'?"):
-            return
-        try:
-            delete_profile(name)
-            self._refresh_profile_list()
-            self._profile_name_var.set("")
-            tkmb.showinfo("Delete Profile", f"Profile '{name}' deleted")
-        except Exception as e:
-            tkmb.showerror("Error", f"Failed to delete: {e}")
-
-    def _on_export_profile(self):
-        name = self._profile_list_var.get()
-        if name == "\U0001f4c2 Load..." or not name:
-            tkmb.showinfo("Export Profile", "Select a profile from the dropdown first")
-            return
-        import tkinter.filedialog as filedialog
-        path = filedialog.asksaveasfilename(
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            initialfile=f"{name}.json",
-            title=f"Exporter le profil '{name}'"
-        )
-        if not path:
-            return
-        if export_profile(name, path):
-            tkmb.showinfo("Export Profile", f"Profil '{name}' exporté vers {path}")
-        else:
-            tkmb.showerror("Export Error", f"Échec de l'export du profil '{name}'")
-
-    def _on_import_profile(self):
-        import tkinter.filedialog as filedialog
-        path = filedialog.askopenfilename(
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            title="Importer un profil"
-        )
-        if not path:
-            return
-        config = import_profile(path)
-        if config is None:
-            tkmb.showerror("Import Error", "Fichier invalide ou corrompu")
-            return
-        self._config_panel.apply_config_to_ui(config)
-        if config.name:
-            self._profile_name_var.set(config.name)
-        self._refresh_profile_list()
-        tkmb.showinfo("Import Profile", f"Profil importé depuis {path}")
 
     def _set_logo_connected(self, connected: bool) -> None:
         """Swap logo sidebar entre état connecté (_on) et déconnecté."""
@@ -376,22 +251,33 @@ class FftescApp(ctk.CTk):
                             break
                         offset += frame_len
         elif transport and transport.is_connected:
+            # Envoie plusieurs commandes pour détecter l'ESC
+            # Le firmware de référence ne gère que OBTAIN_DATA_ONCE (commande 0)
             frame = build_obtain_all_ids_frame()
             transport.send(frame)
-        self.after(800, self._process_scan_results)
+            fw_frame = build_frame(UartCommand.OBTAIN_FIRMWARE_VERSION, b'')
+            transport.send(fw_frame)
+            # OBTAIN_DATA_ONCE est la commande de base pour la détection
+            data_frame = build_frame(UartCommand.OBTAIN_DATA_ONCE, b'')
+            transport.send(data_frame)
+            # On réessaie une seconde fois après un court délai pour être sûr
+            def _retry_obtain():
+                if transport and transport.is_connected:
+                    transport.send(data_frame)
+            self.after(200, _retry_obtain)
+        self.after(1200, self._process_scan_results)
 
     def _process_scan_results(self):
         if self._connection_panel:
             self._connection_panel.show_discovered_escs(self._discovered_escs)
         for ctrl_id, fw_info in self._discovered_escs.items():
             motor_id = MOTOR_LABEL_A if ctrl_id == 0 else MOTOR_LABEL_B
-            # update_motor_data en premier pour le controller_id label,
-            # puis update_firmware_info pour le format riche (version + modèle)
-            self._data_panel.update_motor_data(
-                motor_id,
-                FtescRealtimeData(controller_id=ctrl_id,
-                                  firmware_version=fw_info.version_string))
-            self._data_panel.update_firmware_info(motor_id, fw_info)
+            if fw_info:
+                self._data_panel.update_motor_data(
+                    motor_id,
+                    FtescRealtimeData(controller_id=ctrl_id,
+                                      firmware_version=fw_info.version_string))
+                self._data_panel.update_firmware_info(motor_id, fw_info)
 
     def _on_raw_data(self, raw_data: bytes):
         """Dispatch chaque trame reçue. Supporte plusieurs trames concaténées."""
@@ -422,10 +308,17 @@ class FftescApp(ctk.CTk):
                 if rt_data:
                     self._last_data = rt_data
                     self.after(0, self._update_ui, rt_data)
+                    # Détection automatique via OBTAIN_DATA_ONCE
+                    if getattr(self, '_discovered_escs', None) is not None:
+                        cid = rt_data.controller_id
+                        if cid not in self._discovered_escs:
+                            self._discovered_escs[cid] = None  # marqué mais sans version FW
             elif command == UartCommand.OBTAIN_FIRMWARE_VERSION:
                 fw_info = parse_firmware_info(payload)
                 if fw_info:
                     self.after(0, self._update_firmware_display, fw_info)
+                    if getattr(self, '_discovered_escs', None) is not None:
+                        self._discovered_escs[fw_info.controller_id] = fw_info
             elif command == UartCommand.READ_CONFIG:
                 result = parse_config_response(payload)
                 if result:
@@ -438,9 +331,13 @@ class FftescApp(ctk.CTk):
                     sec_key = SECTION_NAMES.get(sec_id, "?")
                     print(f"[WRITE] Section {sec_key} confirmée (ctrl {ctrl_id})")
             elif command == UartCommand.OBTAIN_ALL_FTESC_ID:
-                fw_info = parse_firmware_info(payload)
-                if fw_info and getattr(self, '_discovered_escs', None) is not None:
-                    self._discovered_escs[fw_info.controller_id] = fw_info
+                ids = parse_obtain_all_ids(payload)
+                if getattr(self, '_discovered_escs', None) is not None:
+                    for cid in ids:
+                        if cid not in self._discovered_escs:
+                            self._discovered_escs[cid] = None
+                    if self._connection_panel:
+                        self._connection_panel.show_discovered_escs(self._discovered_escs)
         except Exception as e:
             print(f"[DISPATCH] Erreur trame {command}: {e}")
 

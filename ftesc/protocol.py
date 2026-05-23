@@ -277,6 +277,31 @@ def build_obtain_all_ids_frame() -> bytes:
     return build_frame(UartCommand.OBTAIN_ALL_FTESC_ID, b'')
 
 
+def build_set_id_frame(new_id: int, current_ma: int = 0) -> bytes:
+    """Construit une trame SET_ID_CURRENT (cmd 37).
+    
+    Payload: [new_id (1B), current_mA (4B, big-endian int32)]
+    Si current_ma > 0, seul l'ESC qui détecte ce courant sur ses phases
+    change d'ID (permet d'identifier physiquement l'ESC cible sur un bus
+    UART partagé). Si current_ma == 0, changement d'ID direct (utilisable
+    quand un seul ESC est connecté au bus UART).
+    """
+    payload = bytes([new_id & 0xFF]) + struct.pack('>i', current_ma)
+    return build_frame(UartCommand.SET_ID_CURRENT, payload)
+
+
+def parse_obtain_all_ids(payload: bytes) -> list[int]:
+    """Parse la réponse OBTAIN_ALL_FTESC_ID.
+    
+    Retourne une liste d'IDs de contrôleurs détectés.
+    Chaque ID est un octet: [ctrl_id_0, ctrl_id_1, ...]
+    """
+    ids = []
+    for b in payload:
+        ids.append(b)
+    return ids
+
+
 def parse_realtime_data(payload: bytes) -> Optional[FtescRealtimeData]:
     try:
         offset = 0
@@ -314,10 +339,8 @@ def parse_realtime_data(payload: bytes) -> Optional[FtescRealtimeData]:
 def parse_firmware_info(payload: bytes) -> Optional[FtescFirmwareInfo]:
     try:
         # Expected format: [controller_id, version_major, version_minor, version_patch, model_type] (5 bytes)
-        # But some firmwares may return different length; we try to be flexible.
         if len(payload) < 5:
-            print(f"Erreur de decodage firmware : payload too short ({len(payload)} bytes)")
-            print(f"Payload bytes: {payload.hex()}")
+            print(f"⚠️ parse_firmware_info: payload trop court ({len(payload)} octets) : {payload.hex()}")
             return None
         offset = 0
         controller_id = payload[offset]; offset += 1
@@ -333,7 +356,5 @@ def parse_firmware_info(payload: bytes) -> Optional[FtescFirmwareInfo]:
             model_type=model_type,
         )
     except (IndexError, ValueError, TypeError) as e:
-        print(f"Erreur de decodage firmware : {e}")
-        print(f"Payload length: {len(payload)}")
-        print(f"Payload bytes: {payload.hex()}")
+        print(f"⚠️ Erreur parse_firmware_info: {e} (payload: {len(payload)} octets, hex: {payload.hex()})")
         return None

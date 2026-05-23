@@ -1,39 +1,29 @@
-# Environnement virtuel
-venv/
+# Fichiers Spyder
+.spyproject/
+
+# Fichiers Python compilés
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
 
-# Fichiers temporaires
-*.log
-.DS_Store
-
-# PyInstaller build artifacts
-build/
-dist/
-logo_cache/
-
-# Cache utilisateur
-~/.fftesc/
-
-# Configuration utilisateur (contient des paramètres personnels)
-config.json
-
-# Fichiers de logs ou de sortie
-*.out
-
-# Environnements virtuels supplémentaires
-.venv/
+# Environnements virtuels
+venv/
 env/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,build
-.hypothesis/
-.pytest_cache/
+.venv/
+
+# Variables d'environnement
+.env
+
+# IDE divers
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Système
+.DS_Store
+Thumbs.db
+
+# Logs et données temporaires
+*.log
+tmp/

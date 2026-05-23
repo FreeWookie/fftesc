@@ -159,8 +159,15 @@ class ConnectionPanel(ctk.CTkFrame):
             import serial.tools.list_ports as list_ports
         except ImportError:
             return
+        known_vids = (0x1A86, 0x10C4, 0x0403, 0x2E3C, 0x0483, 0x1366, 0x16C0)
         for p in list_ports.comports():
-            if p.vid in (0x1A86, 0x10C4, 0x0403, 0x2E3C) and p.device in items:
+            if p.device not in items:
+                continue
+            if p.vid in known_vids:
+                self._port_var.set(p.device)
+                return
+            # Fallback: port USB (acm*) si aucun VID connu
+            if 'acm' in p.device.lower():
                 self._port_var.set(p.device)
                 return
 
@@ -269,9 +276,12 @@ class ConnectionPanel(ctk.CTkFrame):
         lines = []
         for ctrl_id in sorted(escs.keys()):
             info = escs[ctrl_id]
-            lines.append(
-                _("connection.esc_id_format").format(
-                    id=ctrl_id, version=info.version_string, model=info.model_name))
+            if info:
+                lines.append(
+                    _("connection.esc_id_format").format(
+                        id=ctrl_id, version=info.version_string, model=info.model_name))
+            else:
+                lines.append(f"ESC {ctrl_id}: v??? (connecté, version FW inconnue)")
         self._scan_results_label.configure(
             text=_("connection.escs_found").format(count=len(escs)) + "\n" + "\n".join(lines),
             text_color=COLORS['success'])

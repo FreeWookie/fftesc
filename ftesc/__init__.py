@@ -41,6 +41,8 @@ from .protocol import (
     parse_realtime_data,
     parse_firmware_info,
     build_obtain_all_ids_frame,
+    build_set_id_frame,
+    parse_obtain_all_ids,
     decompose_u8,
     compose_u8,
 )
@@ -57,6 +59,7 @@ from .config_protocol import (
 )
 
 from .resources import get_resource_path
+from .motor_detection import MotorDetector, MotorDetectionResult, DetectionSample
 
 __all__ = [
     'FtescRealtimeData',
@@ -96,6 +99,8 @@ __all__ = [
     'parse_realtime_data',
     'parse_firmware_info',
     'build_obtain_all_ids_frame',
+    'build_set_id_frame',
+    'parse_obtain_all_ids',
     'FtescTransport',
     'ConnectionState',
     'SerialConfig',

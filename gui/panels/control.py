@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import tkinter
+import tkinter.messagebox as tkmb
 import threading
 import time
 from ftesc import FtescTransport, UartCommand, build_frame, FtescDualData
@@ -96,6 +97,43 @@ class ControlPanel(ctk.CTkFrame):
             fg_color=COLORS['bg_light'], hover_color=COLORS['danger'],
             font=ctk.CTkFont(size=11), height=28).pack(padx=15, pady=(5, 0), fill='x')
 
+        self._detect_btn = ctk.CTkButton(self, text="🔬 Détection moteur",
+            command=self._start_detection,
+            fg_color=COLORS['mauve'], hover_color=COLORS['accent'],
+            font=ctk.CTkFont(size=11, weight='bold'), height=32)
+        self._detect_btn.pack(padx=15, pady=(6, 0), fill='x')
+
+        # ── Saisie manuelle KV ──────────────────────────────────
+        manual_frame = ctk.CTkFrame(self, fg_color="transparent")
+        manual_frame.pack(fill='x', padx=15, pady=(4, 0))
+
+        ctk.CTkLabel(manual_frame, text="KV manuel:",
+            font=ctk.CTkFont(size=11), text_color=COLORS['text_secondary']
+        ).pack(side='left')
+
+        self._kv_var = ctk.StringVar(value="170")
+        self._kv_entry = ctk.CTkEntry(manual_frame, textvariable=self._kv_var,
+            width=50, font=ctk.CTkFont(size=11),
+            fg_color=COLORS['bg_dark'], border_color=COLORS['accent_blue'])
+        self._kv_entry.pack(side='left', padx=(4, 8))
+
+        ctk.CTkLabel(manual_frame, text="pôles:",
+            font=ctk.CTkFont(size=11), text_color=COLORS['text_secondary']
+        ).pack(side='left')
+
+        self._poles_var = ctk.StringVar(value="7")
+        self._poles_entry = ctk.CTkEntry(manual_frame, textvariable=self._poles_var,
+            width=40, font=ctk.CTkFont(size=11),
+            fg_color=COLORS['bg_dark'], border_color=COLORS['accent_blue'])
+        self._poles_entry.pack(side='left', padx=(4, 6))
+
+        self._match_btn = ctk.CTkButton(manual_frame, text="Correspondre",
+            command=self._manual_match,
+            fg_color=COLORS['bg_light'], hover_color=COLORS['accent_blue'],
+            text_color=COLORS['text_primary'],
+            font=ctk.CTkFont(size=10), height=26, width=90)
+        self._match_btn.pack(side='left')
+
         ctk.CTkFrame(self, height=2, fg_color=COLORS['bg_light']).pack(fill='x', padx=15, pady=(8, 6))
         peri_frame = ctk.CTkFrame(self, fg_color='transparent')
         peri_frame.pack(fill='x', padx=15, pady=(0, 15))
@@ -121,6 +159,7 @@ class ControlPanel(ctk.CTkFrame):
         self._logger = FtescDataLogger()
         self._logging = False
         self.on_log_data = None
+        self.on_detection_result = None
 
     def _scroll_entry(self, entry, var, step=1.0):
         target = entry._entry if hasattr(entry, '_entry') else entry
@@ -205,8 +244,75 @@ class ControlPanel(ctk.CTkFrame):
 
     def _reboot(self):
         if not self._transport.is_connected: return
+        self._auto_reading = False
+        payload = decompose_f16(0.0, 10000.0)
+        frame = build_frame(UartCommand.SET_DUTY, payload)
+        self._transport.send(frame)
         frame = build_frame(UartCommand.REBOOT_FTESC, b'')
         self._transport.send(frame)
+
+    def _start_detection(self):
+        if not self._transport.is_connected:
+            tkmb.showwarning("Détection", "Connectez-vous d'abord à un ESC")
+            return
+        if not tkmb.askyesno("Détection moteur",
+            "Le moteur va tourner librement à basse vitesse.\n\n"
+            "⚠️  Assurez-vous que :\n"
+            "  • La roue est décollée du sol\n"
+            "  • Aucune charge sur le moteur\n"
+            "  • Personne dans la trajectoire\n\n"
+            "Continuer ?"):
+            return
+        self._detect_btn.configure(text="⏳ Détection...", state='disabled')
+        self._auto_reading = False
+        threading.Thread(target=self._detection_thread, daemon=True).start()
+
+    def _detection_thread(self):
+        from ftesc.motor_detection import MotorDetector
+        detector = MotorDetector(self._transport)
+        result = detector.detect()
+        self.after(0, self._show_detection_result, result)
+
+    def _show_detection_result(self, result):
+        self._detect_btn.configure(text="🔬 Détection moteur", state='normal')
+        if not result.success:
+            tkmb.showerror("Détection échouée", result.error)
+            return
+        lines = [
+            f"KV électrique : {result.kv_elec:.0f} RPM/V",
+            f"Paires de pôles : {result.pole_pairs}",
+            f"KV mécanique : {result.kv_mech:.0f} RPM/V",
+            f"Points mesurés : {len(result.samples)}",
+        ]
+        if result.motor_type_hint:
+            lines.append(f"Moteur suggéré : {result.motor_type_hint}")
+        tkmb.showinfo("Résultat détection", "\n".join(lines))
+        if self.on_detection_result:
+            self.on_detection_result(result)
+
+    def _manual_match(self):
+        try:
+            kv = float(self._kv_var.get().strip())
+            poles = int(self._poles_var.get().strip())
+        except ValueError:
+            tkmb.showerror("Erreur", "KV et pôles doivent être des nombres")
+            return
+        if kv <= 0 or poles <= 0:
+            tkmb.showerror("Erreur", "KV et pôles doivent être > 0")
+            return
+
+        from ftesc.motor_detection import MotorDetector
+        name, score = MotorDetector.match_by_kv(kv, poles)
+
+        lines = [f"KV mécanique saisi : {kv:.0f} RPM/V",
+                 f"Paires de pôles : {poles}",
+                 f"KV électrique : {kv * poles:.0f} RPM/V"]
+        if name:
+            lines.append(f"Moteur correspondant : {name}")
+            lines.append(f"Score : {score:.2f}")
+        else:
+            lines.append("Aucun moteur trouvé dans la base")
+        tkmb.showinfo("Correspondance KV", "\n".join(lines))
 
     def _emergency_stop(self):
         if not self._transport.is_connected: return

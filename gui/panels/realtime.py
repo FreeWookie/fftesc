@@ -15,9 +15,12 @@ class RealtimeDataPanel(ctk.CTkFrame):
         self._cards_a: dict = {}
         self._cards_b: dict = {}
 
-        self._build_motor_section(self, "A", COLORS['accent_blue'])
-        ctk.CTkFrame(self, height=2, fg_color=COLORS['bg_light']).pack(fill='x', padx=10, pady=8)
-        self._build_motor_section(self, "B", COLORS['accent_green'])
+        scroll = ctk.CTkScrollableFrame(self, fg_color='transparent')
+        scroll.pack(fill='both', expand=True)
+
+        self._build_motor_section(scroll, "A", COLORS['accent_blue'])
+        ctk.CTkFrame(scroll, height=2, fg_color=COLORS['bg_light']).pack(fill='x', padx=10, pady=8)
+        self._build_motor_section(scroll, "B", COLORS['accent_green'])
 
     def _build_motor_section(self, parent, suffix: str, accent: str):
         header = ctk.CTkFrame(parent, fg_color=COLORS['bg_medium'], height=36)
