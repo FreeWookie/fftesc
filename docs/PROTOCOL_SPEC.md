@@ -1,5 +1,7 @@
 # FTESC UART Protocol Specification
 
+> **Validated against original firmware source** `ftesc_v1.4_1.5_uart_handle.c` (Chinese original, not translated copy).
+
 ## Frame Format
 
 Every frame follows this structure:
@@ -22,7 +24,7 @@ Every frame follows this structure:
 ## CRC-16 Calculation
 
 Polynomial: CRC-16/MODBUS (x^16 + x^15 + x^2 + 1)
-Algorithm: Table-driven with two 256-byte lookup tables.
+Algorithm: Table-driven with two 256-byte lookup tables (`aucCRCHi`, `aucCRCLo` from original firmware).
 Initial value: `0xFFFF`
 
 ```python
@@ -89,7 +91,7 @@ result = (exponent << 23) | (uint & 0x7FFFFF)
 if mantissa < 0: result |= (1 << 31)
 ```
 
-## Real-time Data Frame (23 bytes)
+## Real-time Data Frame (28 bytes)
 
 | Offset | Size | Field          | Type |
 |--------|------|----------------|------|
@@ -102,8 +104,8 @@ if mantissa < 0: result |= (1 << 31)
 | 16     | 2    | duty_cycle_now | f16  |
 | 18     | 2    | temp_fet       | f16  |
 | 20     | 2    | temp_motor     | f16  |
-| 22     | 1    | cpu_load       | f16  |
-| —      | —    | encoder_angle  | f32  (if available via long frame) |
+| 22     | 2    | cpu_load       | f16  |
+| 24     | 4    | encoder_angle  | f32  |
 
 ## Firmware Info Frame (5 bytes)
 

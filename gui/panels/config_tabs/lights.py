@@ -84,14 +84,14 @@ def build_ui(tab_frame, panel):
     ctk.CTkLabel(sec, text=_("lights.beep_on_startup"),
         font=ctk.CTkFont(size=13, weight='bold'),
         text_color=COLORS['text_primary']).grid(row=6, column=0, sticky='w', pady=(10, 2))
-    bp_on = ctk.BooleanVar(value=panel._dual_config.beep_on_startup)
+    bp_on = ctk.BooleanVar(value=panel._dual_config.dual_setup.beep_on_startup)
     ctk.CTkSwitch(sec, text="", variable=bp_on, onvalue=True, offvalue=False,
         fg_color=COLORS['bg_light'], progress_color=COLORS['accent_green'],
         button_hover_color=COLORS['accent'], switch_width=36, switch_height=18
     ).grid(row=7, column=0, sticky='w', padx=(0, 10))
 
     def do_apply():
-        panel._dual_config.beep_on_startup = bp_on.get()
+        panel._dual_config.dual_setup.beep_on_startup = bp_on.get()
         transport = panel._get_transport()
         if transport and transport.is_connected:
             transport.send(build_write_config_frame(127, SEC_DUAL, panel._dual_config))

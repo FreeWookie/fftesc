@@ -1,7 +1,7 @@
 <div align="center">
   <img src="fftesc_logo.svg" alt="FFTESC Logo" width="120"/>
   <h1>FFTESC — Free FTESC Tool</h1>
-  <p><strong>Version 1.01</strong> — Interface de configuration, contrôle et diagnostic pour<br>
+  <p><strong>Version 1.2.0</strong> — Interface de configuration, contrôle et diagnostic pour<br>
   contrôleurs électroniques de vitesse (ESC) série FT-*BD</p>
   <p>
     <a href="#-fonctionnalités">Fonctionnalités</a> •
@@ -35,6 +35,7 @@
 - [🌍 Internationalisation](#-internationalisation)
 - [🧪 Tests](#-tests)
 - [📜 Licence](#-licence)
+- [🔬 Downgrade FT85BD](#-downgrade-ft85bd-reverse-engineering)
 - [🙏 Remerciements](#-remerciements)
 
 ---
@@ -86,12 +87,24 @@ Un assistant en **4 étapes** pour configurer votre e-skate/e-bike sans connaiss
 
 ⚠️ *Avertissements automatiques* : vitesse >80 km/h, ratio pignon/poulie <1.5 ou >6.0, KV moteur élevé, pignon trop petit.
 
-### 🆘 Module de récupération (Réanimation)
+### 🆘 Module de récupération
 Diagnostic et réanimation des contrôleurs "brickés" :
 
 - 🔍 **Diagnostic MCU** : état Sain / Corrompu / Inconnu
 - 🔄 **Forçage bootloader UART** : commande `ENTER_BOOTLOADER` (60)
-- 🔗 **Guide ST-Link** : câblage + lien vers STM32CubeProgrammer
+- 🔗 **Guide ST-Link/SWD** : câblage + flash firmware
+
+
+
+### 🎯 Downgrade FT85BD (reverse engineering)
+Reverse-engineering du protocole FTESC pour flasher le firmware **v1.5** sur FT85BD :
+
+- **MCU identifié** : Artery AT32 (USB PID `2e3c:7570`), pas STM32
+- **Bootloader** : protocole STM32/AT32 implémenté dans `ftesc/stm32_bootloader.py`
+- **Firmware v1.5 extrait** : 2 binaires 64KB (`ft85bd_fw.bin`, `ft85bd_fw_v2.bin`)
+- **Flash** : `python3 flash_firmware.py` (via BOOT0 ou cmd 60)
+- **Scan protocole** : 23 commandes identifiées (dont cmd 60/61)
+- **SET_SPEED (39)** confirmé fonctionnel
 
 ### 🎨 Interface moderne
 - **Thème sombre/clair** : basculement instantané
@@ -270,13 +283,15 @@ FFTESC-TOOL/
 ├── build_bundle.sh       ← Script de compilation bundle
 ├── fftesc_tool.spec      ← Configuration PyInstaller
 │
-├── ftesc/                ← Couche métier (~3 200 lignes)
+├── ftesc/                ← Couche métier (~3 500 lignes)
 │   ├── __init__.py       ← API publique
 │   ├── data.py           ← Modèles de données
-│   ├── protocol.py       ← Protocole UART
+│   ├── protocol.py       ← Protocole UART (23 commandes)
 │   ├── transport.py      ← Communication série asynchrone
 │   ├── config_protocol.py← Encodage configuration
 │   ├── profiles.py       ← Gestion des profils
+│   ├── stm32_bootloader.py ← Bootloader AT32/STM32 (sync, erase, write, go)
+│   ├── motor_detection.py ← Détection paramètres moteur
 │   ├── simulator.py      ← Simulateur matériel
 │   ├── wizard_engine.py  ← Assistant de configuration
 │   ├── wizard_data.py    ← Base de données moteurs/batteries

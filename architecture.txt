@@ -1,4 +1,4 @@
-FFTESC — Architecture du projet (v1.01)
+FFTESC — Architecture du projet (v1.2.0)
 ==========================================
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -46,12 +46,16 @@ FFTESC — Architecture du projet (v1.01)
 │                          + enums + temps réel + firmware     │
 │  ftesc/protocol.py       Protocole UART : CRC16, framing,    │
 │                          compose/décompose (u8..af32)        │
+│                          + 23 commandes (0..61)              │
 │                          + ENTER_BOOTLOADER(60)              │
 │                          + CHECK_MCU_HEALTH(61)              │
 │  ftesc/transport.py      Couche série asynchrone (thread)    │
 │                          buffer, callbacks, stats            │
 │                          + enter_bootloader()                │
 │                          + check_mcu_health()                │
+│  ftesc/stm32_bootloader.py Bootloader AT32/STM32 (UART)     │
+│                          sync, get, erase, write, go         │
+│  ftesc/motor_detection.py Détection automatique moteur       │
 │  ftesc/config_protocol.py Encodage/décodage 12 sections      │
 │                          config ↔ bytes UART (Field class)   │
 │  ftesc/profiles.py       Persistance JSON profils            │
@@ -67,10 +71,14 @@ FFTESC — Architecture du projet (v1.01)
 │                                                              │
 │  UART série (pyserial) ←→ µC FTESC                          │
 │  Header 0xAA/0xBB, Footer 0xDD, CRC16 MODBUS               │
-│  22 commandes (SET_DUTY, READ_CONFIG, etc.)                  │
+│  23 commandes (0..61) dont ENTER_BOOTLOADER(60)             │
 │  Types : u8..u32, i16..i32, f16 (×100), f32 (×1e6), af32   │
 │                                                              │
-│  Référence firmware C : fftesc_uart_FR.c (378 lignes)       │
+│  MCU : Artery AT32 (PID 2e3c:7570) — pas STM32              │
+│  Bootloader UART (STM32/AT32) : stm32_bootloader.py         │
+│  Flash firmware : flash_firmware.py                          │
+│                                                              │
+│  Référence firmware C : ftesc_v1.4_1.5_uart_handle.c        │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 
@@ -86,12 +94,14 @@ FFTESC-TOOL/
 ├── README.txt             Documentation
 ├── disclaimer.txt         Décharge de responsabilité
 │
-├── ftesc/                 Couche métier (~3 200 lignes)
+├── ftesc/                 Couche métier (~3 500 lignes)
 │   ├── __init__.py        Réexporte toute l'API publique
 │   ├── data.py            Dataclasses : 12 configs + runtime
 │   ├── protocol.py        CRC16, framing, compose/décompose
 │   ├── transport.py       Série asynchrone (thread, buffer)
 │   ├── config_protocol.py Sérialisation config ↔ UART
+│   ├── stm32_bootloader.py Bootloader AT32 (sync/erase/write/go)
+│   ├── motor_detection.py Détection paramètres moteur
 │   ├── profiles.py        Gestion profils JSON
 │   ├── logger.py          Log CSV temps réel
 │   ├── simulator.py       Simulateur dual moteur
@@ -191,10 +201,15 @@ PROTOCOLE UART (résumé)
 Trame : [0xAA|0xBB] [length] [command] [payload...] [CRC16] [0xDD]
 CRC16 : MODBUS big-endian (2 tables 256 octets)
 
-Commandes : OBTAIN_DATA_ONCE(0), SET_DUTY(3), SET_CURRENT(4),
-             SET_BRAKE_CURRENT(6), OBTAIN_FIRMWARE_VERSION(17),
-             READ_CONFIG(40), WRITE_CONFIG(41),
-             READ_ALL_CONFIG(42), WRITE_ALL_CONFIG(43),
+Commandes (23) : OBTAIN_DATA_ONCE(0), CONTROL_AND_OBTAIN(2),
+             SET_DUTY(3), SET_CURRENT(4), SET_CURRENT_GEAR(5),
+             SET_BRAKE_CURRENT(6), CAN_FWARD(16),
+             OBTAIN_FIRMWARE_VERSION(17), KEEP_LIVE(25),
+             SET_AUTO_OBTAIN(26), REBOOT(29), OBTAIN_ALL_ID(30),
+             SET_CURRENT_GEAR_AND_OBTAIN(32), REBOOT_FTESC(35),
+             SET_ID_CURRENT(37), SET_POSITION(38), SET_SPEED(39),
+             SET_HEADLIGHT(44), SET_BRAKELIGHT(45), SET_BUZZER(46),
+             GET_LIGHTS_STATUS(48), SET_LIGHTS(49),
              ENTER_BOOTLOADER(60), CHECK_MCU_HEALTH(61)
 
 Types : u8, u16, u24, u32, i16, i24, i32,
@@ -207,20 +222,24 @@ Sections config : Motor(0), Hall(1), FOC(2), Limits(3),
                   Battery(8), Dual(9), IMU(10), CAN(11)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-NOUVEAUTÉS v1.01
+NOUVEAUTÉS v1.2.0
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-▪ Assistant de configuration (Wizard) 4 étapes :
-   - Sélection profil (Débutant/Avancé/Expert)
-   - Moteur, batterie, transmission (pignon/poulie auto)
-   - Calcul automatique courant, vitesse, ERPM, PID
-   - Résumé avec avertissements de cohérence
-▪ Internationalisation : 6 langues (FR, EN, DE, ES, PL, IT)
-▪ Module de récupération (🆿 Réanimation) :
-   - Diagnostic MCU (sain/corrompu/inconnu)
-   - Forçage mode bootloader UART
-   - Guide câblage ST-Link + lien STM32CubeProgrammer
-▪ Conversion unités : diamètre roue (mm/pouces), vitesse (km/h/mph)
-▪ Efficacité transmission configurable (70%-95%)
-▪ Avertissements de cohérence : KV élevé, pignon petit, ratio extrême
+▪ Bootloader AT32/STM32 : stm32_bootloader.py (sync, erase, write, go)
+▪ Flash firmware FT85BD : flash_firmware.py
+▪ Firmware v1.5 extrait : ft85bd_fw.bin, ft85bd_fw_v2.bin
+▪ Debug série : debug_comm.py (scan commandes, analyse réponse)
+▪ Bridge MITM : serial_bridge.py (capture traffic Wine ↔ ESC)
+▪ Détection moteur : motor_detection.py (expérimental)
+▪ Cmd 60 (ENTER_BOOTLOADER), cmd 61 (CHECK_MCU_HEALTH) ajoutés
+▪ Panneau recovery renommé "Enter Bootloader Mode"
+▪ Lights tab : contrôle feu avant/stop/buzzer
+▪ MCU identifié : Artery AT32 (PID 2e3c:7570) — pas STM32
+▪ 23 commandes FTESC analysées (scan complet 0..79)
+
+v1.01 (précédent) :
+▪ Assistant de configuration (Wizard) 4 étapes
+▪ Internationalisation : 6 langues
+▪ Module de récupération (diagnostic MCU, bootloader UART)
+▪ Conversion unités, efficacité transmission, cohérence
 ▪ Décharge de responsabilité (disclaimer.txt)

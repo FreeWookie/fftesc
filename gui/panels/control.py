@@ -3,8 +3,10 @@ import tkinter
 import tkinter.messagebox as tkmb
 import threading
 import time
-from ftesc import FtescTransport, UartCommand, build_frame, FtescDualData
+from ftesc import FtescTransport, UartCommand, build_frame, FtescDualData, ControlCommand
 from ftesc.protocol import decompose_f16, decompose_f32
+from ftesc.data import InputControlConfig
+from ftesc.config_protocol import build_write_config_frame
 from ftesc.logger import FtescDataLogger
 from gui.styles.colors import COLORS
 from gui.widgets.helpers import enhance_scroll
@@ -154,6 +156,42 @@ class ControlPanel(ctk.CTkFrame):
         self._peri_states: dict = {UartCommand.SET_HEADLIGHT: False,
                                    UartCommand.SET_BRAKELIGHT: False}
 
+        # ── 🧪 Motor Command Probe (debug) ──────────────────────
+        ctk.CTkFrame(self, height=2, fg_color=COLORS['accent_orange']).pack(fill='x', padx=15, pady=(8, 6))
+        ctk.CTkLabel(self, text="🧪 Motor Probe",
+            font=ctk.CTkFont(size=11, weight='bold'),
+            text_color=COLORS['accent_orange']).pack(padx=15, anchor='w')
+        ctk.CTkButton(self, text="Read Sec6", command=self._read_section6,
+            fg_color=COLORS['accent_blue'], hover_color=COLORS['accent'],
+            font=ctk.CTkFont(size=11), height=28).pack(padx=15, pady=(4, 2), fill='x')
+        ctk.CTkButton(self, text="UART On", command=self._enable_uart,
+            fg_color=COLORS['accent_green'], hover_color=COLORS['success'],
+            font=ctk.CTkFont(size=11, weight='bold'), height=28).pack(padx=15, pady=2, fill='x')
+        ctk.CTkButton(self, text="Duty 5% (cmd 2)", command=self._probe_cmd2_5,
+            fg_color=COLORS['accent_blue'], hover_color=COLORS['accent'],
+            font=ctk.CTkFont(size=11), height=28).pack(padx=15, pady=2, fill='x')
+        ctk.CTkButton(self, text="Duty 20% (cmd 2)", command=self._probe_cmd2_20,
+            fg_color=COLORS['success'], hover_color=COLORS['accent_green'],
+            font=ctk.CTkFont(size=11), height=28).pack(padx=15, pady=2, fill='x')
+        speed_frame = ctk.CTkFrame(self, fg_color='transparent')
+        speed_frame.pack(padx=15, pady=2, fill='x')
+        self._speed_var = ctk.DoubleVar(value=200.0)
+        self._speed_entry = ctk.CTkEntry(speed_frame, textvariable=self._speed_var,
+            width=60, font=ctk.CTkFont(size=11),
+            fg_color=COLORS['bg_dark'], border_color=COLORS['accent_orange'])
+        self._speed_entry.pack(side='left', fill='x', expand=True)
+        self._scroll_entry(self._speed_entry, self._speed_var, step=100)
+        ctk.CTkLabel(speed_frame, text="RPM",
+            font=ctk.CTkFont(size=10), text_color=COLORS['text_secondary']
+        ).pack(side='left', padx=(4, 0))
+        ctk.CTkButton(speed_frame, text="▶ Speed",
+            command=self._probe_cmd39,
+            fg_color=COLORS['accent_orange'], hover_color=COLORS['accent'],
+            font=ctk.CTkFont(size=11), height=28, width=80).pack(side='right', padx=(5, 0))
+        ctk.CTkButton(self, text="⛔ Stop (cmd 3=0)", command=self._emergency_stop,
+            fg_color=COLORS['danger'], hover_color='#b91c1c',
+            font=ctk.CTkFont(size=11), height=28).pack(padx=15, pady=(2, 12), fill='x')
+
         self._auto_reading = False
         self._auto_thread = None
         self._logger = FtescDataLogger()
@@ -199,6 +237,58 @@ class ControlPanel(ctk.CTkFrame):
         payload = decompose_f32(brake, 1000000.0)
         frame = build_frame(UartCommand.SET_BRAKE_CURRENT, payload)
         self._transport.send(frame)
+
+    def _probe_cmd2_5(self):
+        if not self._transport.is_connected: return
+        payload = decompose_f16(0.05, 10000.0)
+        frame = build_frame(UartCommand.CONTROL_AND_OBTAIN_DATA_ONCE, payload)
+        print(f"[PROBE] cmd=2 duty=5% → {frame.hex()}")
+        self._transport.send(frame)
+
+    def _probe_cmd2_20(self):
+        if not self._transport.is_connected: return
+        payload = decompose_f16(0.20, 10000.0)
+        frame = build_frame(UartCommand.CONTROL_AND_OBTAIN_DATA_ONCE, payload)
+        print(f"[PROBE] cmd=2 duty=20% → {frame.hex()}")
+        self._transport.send(frame)
+
+    def _probe_cmd39(self):
+        if not self._transport.is_connected: return
+        try:
+            speed = self._speed_var.get()
+        except (ValueError, tkinter.TclError):
+            speed = 200.0
+        payload = decompose_f32(speed, 1000000.0)
+        frame = build_frame(UartCommand.SET_SPEED, payload)
+        print(f"[PROBE] cmd=39 (SET_SPEED) {speed:.0f} RPM → {frame.hex()}")
+        self._transport.send(frame)
+
+    def _read_section6(self):
+        if not self._transport.is_connected: return
+        from ftesc.config_protocol import build_read_config_frame
+        from ftesc.protocol import build_frame, UartCommand, build_vesc_frame
+        frame = build_read_config_frame(127, 6)
+        print(f"[PROBE] FTESC READ_CONFIG sec6 ctrl=127 → {frame.hex()}")
+        self._transport.send(frame)
+        # Essaie READ_ALL_CONFIG (cmd 42 = 0x2A)
+        frame2 = build_frame(UartCommand.READ_ALL_CONFIG, bytes([127]))
+        print(f"[PROBE] FTESC READ_ALL_CONFIG ctrl=127 → {frame2.hex()}")
+        self._transport.send(frame2)
+        # Essaie VESC COMM_GET_APPCONF (cmd 17 = 0x11)
+        payload = bytes([0x11])
+        frame3 = build_vesc_frame(payload)
+        print(f"[PROBE] VESC COMM_GET_APPCONF (17) → {frame3.hex()}")
+        self._transport.send(frame3)
+
+    def _enable_uart(self):
+        if not self._transport.is_connected: return
+        from ftesc.protocol import build_vesc_frame
+        # Lit d'abord la config courante
+        payload = bytes([0x11])  # COMM_GET_APPCONF
+        frame = build_vesc_frame(payload)
+        print(f"[PROBE] VESC COMM_GET_APPCONF(17) → {frame.hex()}")
+        self._transport.send(frame)
+        print("[PROBE] Will modify app_to_use once we have the config")
 
     def _request_data(self):
         if not self._transport.is_connected: return

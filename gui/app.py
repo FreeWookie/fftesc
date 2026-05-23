@@ -86,6 +86,7 @@ class FftescApp(ctk.CTk):
         self._connection_panel.on_scan_request = self._scan_for_escs
         self._connection_panel.on_simulator_state_changed = self._on_simulator_state_changed
         self._discovered_escs: dict[int, FtescFirmwareInfo] = {}
+        self._seen_raw_ctrl_ids: set[int] = set()
 
         self._control_panel = ControlPanel(self._sidebar, self._transport, fg_color='transparent')
         self._control_panel.pack(fill='x')
@@ -101,7 +102,7 @@ class FftescApp(ctk.CTk):
         # Recovery button in sidebar
         self._recovery_button = ctk.CTkButton(
             self._sidebar,
-            text="🆘 Réanimation",
+            text="🆘 Enter Bootloader Mode",
             command=self._open_recovery_window,
             fg_color=COLORS['danger'],
             hover_color=COLORS['danger_hover'],
@@ -172,7 +173,7 @@ class FftescApp(ctk.CTk):
 
         # Create a new top-level window
         recovery_window = ctk.CTkToplevel(self)
-        recovery_window.title("🆘 Zone de Récupération")
+        recovery_window.title("🆘 Enter Bootloader Mode")
         recovery_window.geometry("440x680")
         recovery_window.resizable(True, True)
 
@@ -220,13 +221,21 @@ class FftescApp(ctk.CTk):
         transport = getattr(self, '_transport', None)
         if transport and transport.is_connected:
             self._discovered_escs = {}
+            self._seen_raw_ctrl_ids.clear()
             frame = build_obtain_all_ids_frame()
             transport.send(frame)
-            self.after(800, self._process_scan_results)
+            # FT85BD ne répond pas correctement à OBTAIN_ALL_FTESC_ID,
+            # on envoie aussi FIRMWARE_VERSION et DATA_ONCE pour détection
+            fw_frame = build_frame(UartCommand.OBTAIN_FIRMWARE_VERSION, b'')
+            transport.send(fw_frame)
+            data_frame = build_frame(UartCommand.OBTAIN_DATA_ONCE, b'')
+            transport.send(data_frame)
+            self.after(1200, self._process_scan_results)
 
     def _scan_for_escs(self):
-        self._discovered_escs = {}
         transport = getattr(self, '_transport', None)
+        self._discovered_escs = {}
+        self._seen_raw_ctrl_ids.clear()
         if self._connection_panel._simulating:
             sim = self._connection_panel._sim_instance
             if sim:
@@ -270,6 +279,15 @@ class FftescApp(ctk.CTk):
     def _process_scan_results(self):
         if self._connection_panel:
             self._connection_panel.show_discovered_escs(self._discovered_escs)
+        # Demande le firmware pour chaque ID qui n'a pas encore de fw_info
+        transport = getattr(self, '_transport', None)
+        if transport and transport.is_connected:
+            for ctrl_id, fw_info in list(self._discovered_escs.items()):
+                if fw_info is None:
+                    fw_frame = build_frame(UartCommand.OBTAIN_FIRMWARE_VERSION,
+                        bytes([ctrl_id]))
+                    print(f"[SCAN] Request FW for ctrl_id={ctrl_id} → {fw_frame.hex()}")
+                    transport.send(fw_frame)
         for ctrl_id, fw_info in self._discovered_escs.items():
             motor_id = MOTOR_LABEL_A if ctrl_id == 0 else MOTOR_LABEL_B
             if fw_info:
@@ -281,24 +299,49 @@ class FftescApp(ctk.CTk):
 
     def _on_raw_data(self, raw_data: bytes):
         """Dispatch chaque trame reçue. Supporte plusieurs trames concaténées."""
+        from ftesc.protocol import try_parse_vesc_frame
         offset = 0
         while offset < len(raw_data):
             try:
-                command, payload, status = parse_frame(raw_data[offset:])
-                if status != 'OK':
-                    break
-                self._dispatch_frame(command, payload)
-                # Avancement : calcul de la longueur de la trame courante
+                # Essayer d'abord le format FTESC (0xAA)
                 hdr = raw_data[offset]
                 if hdr == 0xAA:
-                    frame_len = 2 + raw_data[offset + 1] + 3   # hdr+len + payload+len + CRC(2) + footer(1)
-                elif hdr == 0xBB:
-                    frame_len = 3 + ((raw_data[offset + 1] << 8) | raw_data[offset + 2]) + 3
-                else:
-                    break
-                offset += frame_len
+                    command, payload, status = parse_frame(raw_data[offset:])
+                    if status != 'OK':
+                        break
+                    self._dispatch_frame(command, payload)
+                    frame_len = 2 + raw_data[offset + 1] + 3
+                    offset += frame_len
+                    continue
+                # Essayer le format VESC (0x02)
+                if hdr == 0x02:
+                    payload, consumed = try_parse_vesc_frame(raw_data[offset:])
+                    if payload is None:
+                        if consumed in ("too_short", "truncated"):
+                            break
+                        offset += 1
+                        continue
+                    # Déterminer la commande VESC par le premier octet du payload
+                    if len(payload) >= 1:
+                        vesc_cmd = payload[0]
+                        vesc_data = payload[1:]
+                        if vesc_cmd == 0x11:  # COMM_GET_APPCONF response
+                            self._dispatch_frame(UartCommand.VESC_APPCONF, vesc_data)
+                        elif vesc_cmd == 0x10:  # COMM_SET_APPCONF ACK
+                            self._dispatch_frame(UartCommand.VESC_SET_APPCONF, vesc_data)
+                        elif vesc_cmd == 0x95:  # COMM_SET_APPCONF_NO_STORE
+                            self._dispatch_frame(UartCommand.VESC_SET_APPCONF, vesc_data)
+                        else:
+                            print(f"[VESC] cmd=0x{vesc_cmd:02x} data({len(vesc_data)}B): {vesc_data.hex()}")
+                    offset += consumed
+                    continue
+                # Format inconnu
+                break
             except Exception:
                 break
+        if len(raw_data) > 0:
+            print(f"[RAW] Trames reçues ({len(raw_data)} octets): {raw_data.hex()}")
+            print(f"[RAW] Parsing arrêté à offset={offset} / {len(raw_data)} — reste: {raw_data[offset:].hex()}")
 
     def _dispatch_frame(self, command: UartCommand, payload: bytes):
         """Traite une trame unique déjà décodée."""
@@ -311,19 +354,48 @@ class FftescApp(ctk.CTk):
                     # Détection automatique via OBTAIN_DATA_ONCE
                     if getattr(self, '_discovered_escs', None) is not None:
                         cid = rt_data.controller_id
-                        if cid not in self._discovered_escs:
-                            self._discovered_escs[cid] = None  # marqué mais sans version FW
+                        if cid not in self._seen_raw_ctrl_ids:
+                            self._seen_raw_ctrl_ids.add(cid)
+                            if cid > 127:
+                                # FT85BD: raw ctrl_id est 0xDD pour les deux moteurs
+                                # Attribue un ID virtuel (0, 1, …) par ordre de découverte
+                                virtual_id = 0
+                                while virtual_id in self._discovered_escs:
+                                    virtual_id += 1
+                                self._discovered_escs[virtual_id] = None
+                            elif cid not in self._discovered_escs:
+                                self._discovered_escs[cid] = None
+            elif command == UartCommand.CONTROL_AND_OBTAIN_DATA_ONCE:
+                rt_data = parse_realtime_data(payload)
+                if rt_data:
+                    self._last_data = rt_data
+                    self.after(0, self._update_ui, rt_data)
+                    print(f"[PROBE] cmd=2 response: ctrl={rt_data.controller_id}, RPM={rt_data.rpm:.0f}")
+                else:
+                    print(f"[PROBE] cmd=2 response payload ({len(payload)}B): {payload.hex()}")
+            elif command == UartCommand.SET_SPEED:
+                print(f"[PROBE] cmd=39 (SET_SPEED) ACK: payload={payload.hex()}")
             elif command == UartCommand.OBTAIN_FIRMWARE_VERSION:
+                print(f"[FW RAW] payload ({len(payload)}B): {payload.hex()}")
                 fw_info = parse_firmware_info(payload)
                 if fw_info:
+                    print(f"[FW] ID={fw_info.controller_id} v{fw_info.version_major}.{fw_info.version_minor}.{fw_info.version_patch} model={fw_info.model_string!r}")
                     self.after(0, self._update_firmware_display, fw_info)
                     if getattr(self, '_discovered_escs', None) is not None:
-                        self._discovered_escs[fw_info.controller_id] = fw_info
+                        if fw_info.controller_id <= 127:
+                            self._discovered_escs[fw_info.controller_id] = fw_info
+                else:
+                    print(f"[FW] → Non reconnu ! payload hex: {payload.hex()}")
             elif command == UartCommand.READ_CONFIG:
                 result = parse_config_response(payload)
                 if result:
                     ctrl_id, sec_id, data = result
+                    print(f"[CONFIG] READ ctrl={ctrl_id} sec={sec_id} data({len(data)}B)={data.hex()}")
                     self.after(0, self._config_panel.on_config_read, ctrl_id, sec_id, data)
+                else:
+                    print(f"[CONFIG] READ invalid payload ({len(payload)}B): {payload.hex()}")
+            elif command == UartCommand.READ_ALL_CONFIG:
+                print(f"[CONFIG] READ_ALL ctrl={payload[0]} data({len(payload)-1}B)={payload[1:].hex() if len(payload)>1 else 'empty'}")
             elif command == UartCommand.WRITE_CONFIG:
                 result = parse_config_response(payload)
                 if result:
@@ -332,12 +404,26 @@ class FftescApp(ctk.CTk):
                     print(f"[WRITE] Section {sec_key} confirmée (ctrl {ctrl_id})")
             elif command == UartCommand.OBTAIN_ALL_FTESC_ID:
                 ids = parse_obtain_all_ids(payload)
+                print(f"[DISPATCH] OBTAIN_ALL_FTESC_ID raw IDs: {ids}")
                 if getattr(self, '_discovered_escs', None) is not None:
                     for cid in ids:
-                        if cid not in self._discovered_escs:
+                        if cid not in self._discovered_escs and cid <= 127:
                             self._discovered_escs[cid] = None
                     if self._connection_panel:
                         self._connection_panel.show_discovered_escs(self._discovered_escs)
+            elif command == UartCommand.VESC_APPCONF:
+                # VESC app configuration response (from COMM_GET_APPCONF)
+                print(f"[VESC] APPCONF response ({len(payload)}B): {payload.hex()}")
+                if len(payload) > 4:
+                    sig = int.from_bytes(payload[0:4], 'big')
+                    app_to_use = payload[33] if len(payload) > 33 else 0
+                    print(f"[VESC] APPCONF sig=0x{sig:08X} app_to_use={app_to_use}")
+                    if app_to_use == 0:
+                        print("[VESC] → Currently in OFF mode, needs UART (3)")
+                    elif app_to_use == 3:
+                        print("[VESC] → Already in UART mode!")
+            elif command == UartCommand.VESC_SET_APPCONF:
+                print(f"[VESC] SET_APPCONF ACK ({len(payload)}B): {payload.hex()}")
         except Exception as e:
             print(f"[DISPATCH] Erreur trame {command}: {e}")
 
@@ -349,9 +435,10 @@ class FftescApp(ctk.CTk):
         self._data_panel.update_firmware_info(motor_id, fw_info)
         # Mise à jour du panneau de connexion (ESC découvert via OBTAIN_FIRMWARE_VERSION)
         if getattr(self, '_discovered_escs', None) is not None:
-            self._discovered_escs[fw_info.controller_id] = fw_info
-            if self._connection_panel:
-                self._connection_panel.show_discovered_escs(self._discovered_escs)
+            if fw_info.controller_id <= 127:
+                self._discovered_escs[fw_info.controller_id] = fw_info
+                if self._connection_panel:
+                    self._connection_panel.show_discovered_escs(self._discovered_escs)
 
     def _on_error(self, message: str):
         print(f"[ERREUR] {message}")

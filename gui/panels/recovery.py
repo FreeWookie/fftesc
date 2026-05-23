@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-gui/panels/recovery.py — Panneau de réanimation du contrôleur (Bootloader, ST-Link, ID)
+gui/panels/recovery.py — Bootloader control panel (Bootloader, ST-Link, ID)
 """
 
 import customtkinter as ctk

@@ -1,6 +1,6 @@
 FFTESC — Free FTESC Tool
 ==========================
-Version 1.01 — Interface de configuration et contrôle pour ESC
+Version 1.2.0 — Interface de configuration et contrôle pour ESC
 double moteur série FT-*BD (e-skate, e-bike, BLDC)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -28,11 +28,16 @@ FONCTIONNALITÉS
   l'en-tête télémétrie à la connexion
 ▪ Thèmes : palette 20 couleurs nommées, mode sombre/clair
 ▪ Internationalisation : 6 langues (FR, EN, DE, ES, PL, IT)
-▪ 🆿 Module de récupération :
+▪ 🆿 Module de récupération (Enter Bootloader Mode) :
    - Diagnostic MCU (sain/corrompu/inconnu)
-   - Forçage mode bootloader UART
-   - Guide câblage ST-Link + lien STM32CubeProgrammer
-   - Réanimation ESC "brické" sans reflash complet
+   - Forçage mode bootloader UART (cmd 60)
+   - Guide câblage ST-Link/SWD + flash firmware
+▪ 🔬 Downgrade FT85BD (reverse engineering) :
+   - MCU identifié : Artery AT32, pas STM32
+   - Bootloader AT32 implémenté (stm32_bootloader.py)
+   - Firmware v1.5 extrait du tool officiel
+   - Flash firmware : flash_firmware.py
+   - Bridge MITM série : serial_bridge.py
 ▪ ⚙️ Assistant de configuration (Wizard) 4 étapes :
    - Sélection profil (Débutant/Avancé/Expert)
    - Moteur, batterie, transmission (pignon/poulie auto)
@@ -100,23 +105,32 @@ ARCHITECTURE
 
   ftesc/          Couche métier (data, protocol, transport,
                   config_protocol, profiles, logger, simulator,
-                  wizard_engine, wizard_data)
+                  wizard_engine, wizard_data, stm32_bootloader,
+                  motor_detection)
   gui/            Interface graphique (app, panels, widgets,
                   styles, config_tabs, i18n)
   tests/          Tests unitaires pytest (163+ tests)
   docs/           Documentation et descriptions paramètres
+  flash_firmware.py    Flash firmware via bootloader UART
+  serial_bridge.py     MITM série (Wine ↔ ESC)
+  debug_comm.py        Debug protocole interactif
 
 ┌─────────────────────────────────────────────┐
-│  PROTOCOLE UART (22 commandes)              │
+│  PROTOCOLE UART (23 commandes)              │
 │  0  OBTAIN_DATA_ONCE                        │
-│  3  SET_DUTY                                │
-│  4  SET_CURRENT                             │
-│  6  SET_BRAKE_CURRENT                       │
+│  2  CONTROL_AND_OBTAIN_DATA_ONCE            │
 │  17 OBTAIN_FIRMWARE_VERSION                 │
-│  40 READ_CONFIG                             │
-│  41 WRITE_CONFIG                            │
-│  42 READ_ALL_CONFIG                         │
-│  43 WRITE_ALL_CONFIG                        │
+│  25 KEEP_LIVE                               │
+│  26 SET_AUTO_OBTAIN                         │
+│  29 RESET_AND_REBOOT                        │
+│  30 OBTAIN_ALL_FTESC_ID                     │
+│  39 SET_SPEED                               │
+│  44 SET_HEADLIGHT                           │
+│  45 SET_BRAKELIGHT                          │
+│  46 SET_BUZZER                              │
+│  48 GET_LIGHTS_STATUS                       │
+│  49 SET_LIGHTS                              │
+│  51 SAVE_EEPROM                             │
 │  60 ENTER_BOOTLOADER                        │
 │  61 CHECK_MCU_HEALTH                        │
 └─────────────────────────────────────────────┘
@@ -133,8 +147,10 @@ UTILISATION
   5. Profils : sidebar → Sauvegarder/Charger/Supprimer
   6. Simulateur : Mode Simulateur (sans matériel)
   7. Wizard : Assistant de configuration → 4 étapes
-  8. 🆿 Récupération : Réanimation ESC brické
-     → Diagnostic MCU → Bootloader UART → ST-Link
+  8. 🆿 Récupération : Enter Bootloader Mode
+     → Diagnostic MCU → Bootloader UART → ST-Link/SWD
+  9. 🔬 Downgrade FT85BD : flash_firmware.py --skip-enter
+     → flashe le firmware v1.5 via bootloader AT32
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TESTS

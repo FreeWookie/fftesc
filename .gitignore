@@ -1,29 +1,47 @@
-# Fichiers Spyder
-.spyproject/
+# Compilation & bundles
+build/
+dist/
+fftesc
+*.spec
+*.toc
+*.pyz
 
-# Fichiers Python compilés
+# Firmware source archive (extracted Inno Setup)
+_Filpsky ESC Tool V1.5 20250511.exe.extracted/
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
 
-# Environnements virtuels
+# Environnements
 venv/
 env/
 .venv/
 
-# Variables d'environnement
-.env
-
-# IDE divers
+# IDE
 .idea/
 .vscode/
+.spyproject/
 *.swp
 *.swo
 
 # Système
 .DS_Store
 Thumbs.db
+*.bak
 
-# Logs et données temporaires
-*.log
+# Logs & données temporaires
+logs/
 tmp/
+*.log
+bridge_capture.bin
+
+# Cache auto-généré
+logo_cache/
+screenshots/
+
+# Config locale (pas partagée)
+.env
+config.local.json

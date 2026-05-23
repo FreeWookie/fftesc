@@ -1023,7 +1023,8 @@ class FtescFirmwareInfo:
     version_major: int = 0
     version_minor: int = 0
     version_patch: int = 0
-    model_type: int = 0  # 0=FT60BD, 1=FT85BD, 2=FT85KS, etc.
+    model_type: int = 0  # 0=FT60BD, 1=FT85BD, 2=FT85KS, 3=FT80BD
+    model_string: str = ""  # Nom du modèle depuis la réponse FW (ex: "FT85BD")
 
     @property
     def version_string(self) -> str:
@@ -1031,6 +1032,8 @@ class FtescFirmwareInfo:
 
     @property
     def model_name(self) -> str:
+        if self.model_string:
+            return self.model_string
         models = {0: "FT60BD", 1: "FT85BD", 2: "FT85KS", 3: "FT80BD"}
         return models.get(self.model_type, f"Unknown({self.model_type})")
 

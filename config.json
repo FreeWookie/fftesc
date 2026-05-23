@@ -1,0 +1,9 @@
+# -*- coding: utf-8 -*-
+{
+    "default_port": "AUTO",
+    "default_baudrate": 115200,
+    "auto_connect": false,
+    "theme": "dark",
+    "chart_refresh_rate": 100,
+    "log_file": "fft_esc_log.csv"
+}
